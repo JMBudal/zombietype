@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ÚLTIMA LINHA — Apocalipse Zumbi</title>
+<style>
+  :root{--lime:#d8ff77;--red:#ff555d;--panel:#111b22;--cream:#f5edcf}
+  *{box-sizing:border-box}
+  body{margin:0;background:#090f13;color:var(--cream);font-family:Consolas,"Courier New",monospace;display:flex;justify-content:center;min-height:100vh;padding:18px}
+  .shell{width:min(1100px,100%);align-self:center}
+  header{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:0 0 10px;flex-wrap:wrap}
+  .logo{font-size:clamp(20px,3vw,32px);font-weight:900;letter-spacing:3px;color:var(--lime);text-shadow:3px 3px #35502e}
+  .subtitle{font-size:11px;color:#9aa9a7;letter-spacing:2px;margin-top:3px}
+  .tag{border:1px solid #3a5156;padding:7px 10px;font-size:11px;color:#c4d3c8}
+  .game-frame{border:4px solid #283a3d;box-shadow:0 0 0 3px #050809,0 16px 50px #0009;background:#101b20;position:relative}
+  canvas{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#111d20}
+  .hud{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.2fr;gap:8px;padding:10px;background:#111b22;border-top:3px solid #283a3d}
+  .stat{border:1px solid #34474a;background:#0b1318;padding:8px 10px;min-height:54px}
+  .stat-label{font-size:10px;color:#8ba09c;letter-spacing:1.5px;margin-bottom:6px}
+  .stat-value{font-size:17px;font-weight:bold}
+  .hearts{color:#ff646b;letter-spacing:3px}
+  .bar{height:7px;background:#263536;margin-top:7px;overflow:hidden}
+  .bar span{display:block;height:100%;background:var(--lime);width:100%;transition:width .15s}
+  .lower{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:stretch;margin-top:10px}
+  .typing-box{background:#111b22;border:1px solid #34474a;padding:12px 14px;min-height:77px}
+  .typing-label{font-size:10px;color:#8ba09c;letter-spacing:1.5px;margin-bottom:8px}
+  #typingPrompt{font-size:19px;letter-spacing:2px;overflow-wrap:anywhere;min-height:23px}
+  .typed{color:var(--lime)} .remaining{color:#f3f0db}.wrong{color:var(--red);background:#5b1c26;text-decoration:underline}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  button{font-family:inherit;font-weight:bold;letter-spacing:1px;color:#101810;background:var(--lime);border:0;padding:12px 16px;cursor:pointer;box-shadow:0 4px #78933e}
+  button:hover{filter:brightness(1.12)}button:active{transform:translateY(2px);box-shadow:0 2px #78933e}
+  button.secondary{background:#263a3e;color:#e4ebd6;box-shadow:0 4px #10191c;border:1px solid #4a6567}
+  .help{color:#8fa19c;font-size:11px;line-height:1.6;margin:11px 2px 0}
+  .help strong{color:#d8e5d4}
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#071014d9;padding:20px}
+  .modal{max-width:510px;text-align:center;border:3px solid #627d61;background:#111e20;padding:26px 24px;box-shadow:8px 8px #05090b}
+  .modal h1{font-size:clamp(24px,4vw,42px);color:var(--lime);margin:0 0 10px;letter-spacing:3px}
+  .modal p{font-size:13px;line-height:1.7;color:#c5d1c4}
+  .modal .big{font-size:12px;color:#ff747a;letter-spacing:2px;margin:16px 0}
+  .hidden{display:none!important}
+  @media(max-width:650px){body{padding:8px}.hud{grid-template-columns:1fr 1fr}.lower{grid-template-columns:1fr}.actions button{flex:1}.tag{display:none}.stat-value{font-size:15px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header><div><div class="logo">ÚLTIMA LINHA<span style="color:#ff5e65">_</span></div><div class="subtitle">PROTOCOLO DE SOBREVIVÊNCIA // SETOR 07</div></div><div class="tag">FPS DE DIGITAÇÃO · PIXEL SURVIVAL</div></header>
+  <div class="game-frame">
+    <canvas id="game" width="960" height="540" aria-label="Jogo de digitação em primeira pessoa"></canvas>
+    <div class="overlay" id="overlay"><div class="modal">
+      <h1>VOCÊ AINDA<br>ESTÁ VIVO?</h1>
+      <div class="big">⚠ ALERTA DE CONTAMINAÇÃO ⚠</div>
+      <p>Os mortos estão vindo. Digite a palavra sobre a cabeça de um zumbi para mirar e atirar. Você fica travado no alvo até concluir a palavra. Errou? A letra incorreta ficará vermelha.</p>
+      <p><strong>Itens:</strong> digite o código verde quando aparecer. Sobreviva às ondas e conserve sua vida.</p>
+      <button id="startBtn">INICIAR TURNO ▶</button>
+    </div></div>
+  </div>
+  <div class="hud">
+    <div class="stat"><div class="stat-label">INTEGRIDADE</div><div class="stat-value hearts" id="healthText">♥ ♥ ♥ ♥ ♥</div><div class="bar"><span id="healthBar"></span></div></div>
+    <div class="stat"><div class="stat-label">ONDA ATUAL</div><div class="stat-value" id="waveText">01 / 12</div><div class="bar"><span id="waveBar" style="background:#65c9d0;width:0%"></span></div></div>
+    <div class="stat"><div class="stat-label">ABATES</div><div class="stat-value" id="killsText">000</div><div class="stat-label" style="margin-top:5px">PONTOS: <span id="scoreText">0000</span></div></div>
+    <div class="stat"><div class="stat-label">AMEAÇA ATIVA</div><div class="stat-value" id="threatText">NENHUMA</div><div class="stat-label" id="statusText" style="margin-top:5px">AGUARDANDO ORDEM</div></div>
+  </div>
+  <div class="lower">
+    <div class="typing-box"><div class="typing-label" id="typingLabel">TERMINAL DE MIRA // DIGITE PARA ATIRAR</div><div id="typingPrompt"><span style="color:#738782">Nenhum alvo selecionado...</span></div></div>
+    <div class="actions"><button class="secondary" id="skipBtn" title="Abandona o alvo atual, mas não interrompe o avanço dos zumbis">ABANDONAR ALVO</button><button class="secondary" id="restartBtn">REINICIAR ↻</button></div>
+  </div>
+  <div class="help"><strong>CONTROLES:</strong> comece a digitar para selecionar o primeiro alvo. <strong>Backspace</strong> corrige o texto. Você não pode trocar de zumbi até finalizar ou abandonar o alvo. Itens têm códigos verdes e podem ser coletados digitando-os. A arma dispara automaticamente ao completar a palavra.</div>
+</div>
+<script>
+(() => {
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+ctx.imageSmoothingEnabled=false;
+const W=960,H=540;
+const $=id=>document.getElementById(id);
+// Vocabulário amplo em português. Sacos embaralhados evitam repetir palavras
+// até que todas as palavras da categoria tenham sido usadas.
+const wordsEasy = `abacaxi abrigo acidente alegria almofada amizade anel animal antena apito aquario arvore assunto aula avenida bagagem balanço banana bandeira banheiro barco batalha bateria beleza biblioteca bicicleta bilhete bolso boneca borboleta botao brinquedo buzina cabide cabelo cadeira caderno cafe caixa calçada caminho camisa campainha caneca caneta carinho carteira castelo cebola celular cereja certeza chave chuva cidade ciencia cinema cobertor cozinha colher cometa comida conversa coragem coruja corredor cortina caderno desenho destino detalhe diamante domingo duvida elefante elevador energia escada escola espelho estrela estrada fabrica familia fantasma fazenda feijao felicidade janela ferramenta festa figura filme foguete folha formiga fotografia fotografia fronteira fruta futuro garagem garganta gaveta girassol golfinho governo guitarra habilidade historia horizonte hospital ideia ilha imagem inverno jardim joelho jornal jornada juiz lagarta laranja largura legenda leitura liberdade limonada limpeza livro madeira magia mamadeira manga mapa maquina maratona mochila moeda montanha morcego morango motorista musica misterio natureza navio neblina negocio noticia nuvem objeto oceano oficina onibus orelha origem pacote palacio palavra panela papel parede parque passagem paciencia passeio pastel pedra perfume pergunta pescador piano planeta planta planeta piscina planeta ponte portao presente professor projeto pulseira quadro queijo quinta raciocinio raio raiz receita recreio relogio remedio revista riqueza robo romance roupa sabado sabonete sapato saudade segredo semestre sentimento serenata silencio sinal sindicato sistema sorriso sociedade solucao sombra surpresa tapete tarefa teclado telefone tempestade tesoura tesouro tijolo tomate torneira trabalho travesseiro trem tristeza uniforme universo urso vacina varanda vento verdade viagem vitoria vizinho volante xadrez zoologico`.split(/\s+/).map(w=>w.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+const wordsHard = `abastecimento acabamento acolhimento administrador adolescencia agricultura almoxarifado ambulancia amortecedor aniversario apartamento aprendizagem arquitetura atendimento automovel biodiversidade brincadeira calculadora campeonato característica carpintaria churrasqueira circunstancia civilizacao colaboracao combustível comportamento compromisso comunicacao comunidade conhecimento consequencia construcao continente criatividade curiosidade democracia departamento desenvolvimento dificuldade dinossauro diplomacia disciplina diversidade eletricidade elevador embaixada emergencia enciclopedia engenheiro entretenimento equipamento escavadeira esclarecimento estabelecimento experiencia experimento explicacao extraordinario facilidade fotografia funcionamento gerenciamento humanidade identificacao iluminacao imaginacao importancia impressora independencia ingrediente instrumento inteligencia interruptor laboratorio lançamento levantamento locomotiva luminosidade manutencao matematica medicamento meteorologia microfone motocicleta movimento nascimento necessidade observatorio oportunidade organizacao ornamentacao paisagem paralelepipedo passageiro pensamento personalidade perspectiva planejamento policia poluicao possibilidade preferencia preconceito preparacao preservacao procedimento producao profissional propaganda propriedade prosperidade publicidade qualificacao quantidade questionario relacionamento responsabilidade restaurante revolucao sabedoria secretaria significado sensibilidade sentimento separacao sinceridade sociedade tecnologia temperatura trabalhador tranquilidade transformacao universidade velocidade ventilador veterinario`.split(/\s+/).map(w=>w.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+const wordsFast = `aba ano asa ave azul bala balao? bem boa bolo bom boca bola cabo cada café cama cana capa cara casa caso cava cedo cela cem cena ceu cima cine cola colo coma come como copa cor cora coro couro? dado dano data dedo dela dele dente? deus dia dica doce dois dono dose dura duro eco ela ele ema erro essa esse esta este faca fala fale fama faro fase fato fez fio fita flor fogo fora foto frio fuga fumo galo gama gana gato gelo gema gera giro gola goma gota grau grama? guia hoje ilha isso item lado lago lama lana lata lava leao leva leve liga lima limo liso lobo logo luta luva maca mala mala? maio mapa mata mate medo meia meio mesa meta meu mil mimo mina mira mito moda modo mola mole mono mora muro musa nada nave nela nele neto neve ninho? noca? nome nota nove obra obro? olha olho onda onze oral ouro ovo paga pago pala pano papa para pare paro parte? pato pau paz pela pelo pena pera peso pico pipa piso placa? pode povo poço pote povo pura puro raça raio ramo rara raro rasa rato rede reta reto rico rima riso roda rodo rosa roça ruim rumo sala sale? sala salto? selo sede seca seco seda seja selo selo seta sete sino site sofá sola solo soma somar? sopa sopa sota suco suma sumo tapa tapo tela tema temo teia teia teto tipo tira tiro toca todo toda tolo toma tome topo tora toro trem três tufo tudo unha urso vaga vaga vale vale vala vaso vela veio veio vela velo vem vez vida vila vira vivo voar você zero zona`.split(/\s+/).map(w=>w.normalize('NFD').replace(/[\u0300-\u036f]/g,'')).filter(w=>w.length===3||w.length===4);
+
+let easyBag=[], hardBag=[], fastBag=[], lastEasy='', lastHard='', lastFast='';
+function nextFromBag(pool, bagName){
+ let bag=bagName==='hard'?hardBag:bagName==='fast'?fastBag:easyBag;
+ let last=bagName==='hard'?lastHard:bagName==='fast'?lastFast:lastEasy;
+ if(!bag.length){bag=pool.slice();
+   for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[bag[i],bag[j]]=[bag[j],bag[i]];}
+   if(bag.length>1&&bag[bag.length-1]===last)[bag[0],bag[bag.length-1]]=[bag[bag.length-1],bag[0]];
+ }
+ const word=bag.pop();
+ if(bagName==='hard'){hardBag=bag;lastHard=word}else if(bagName==='fast'){fastBag=bag;lastFast=word}else{easyBag=bag;lastEasy=word}
+ return word;
+}
+const itemTypes=[
+ {name:'CRIOGRANADA',code:'GELO',color:'#79f4ff',desc:'CONGELA A HORDA',kind:'freeze'},
+ {name:'MUNIÇÃO TÁTICA',code:'CLIP',color:'#ffe16b',desc:'PALAVRAS DE 1 LETRA',kind:'one'},
+ {name:'KIT MÉDICO',code:'CURA',color:'#ff8a9b',desc:'RECUPERA 1 VIDA',kind:'heal'}
+];
+let state,keysDown=false,lastTime=0,spawnClock=0,itemClock=0,shake=0,flash=0,shot=0,notice='',noticeTimer=0,screenFlicker=0;
+function reset(){
+ state={running:false,over:false,wave:1,waveMax:12,health:5,maxHealth:5,kills:0,score:0,zombies:[],items:[],effects:[],target:null,typed:'',errors:[],waveSpawned:0,waveTotal:5,between:0,freeze:0,oneLetter:0,elapsed:0,shots:0};
+ spawnClock=0;itemClock=5;shake=0;flash=0;shot=0;notice='';noticeTimer=0;
+ $('overlay').classList.remove('hidden');$('startBtn').textContent='INICIAR TURNO ▶';
+ $('typingPrompt').innerHTML='<span style="color:#738782">Nenhum alvo selecionado...</span>';
+ updateHud();draw(0);
+}
+function rand(a,b){return a+Math.random()*(b-a)}
+function pick(a){return a[Math.floor(Math.random()*a.length)]}
+function spawnZombie(){
+ const wave=state.wave;
+ let type='walker';
+ if(wave>=3&&Math.random()<Math.min(.25,.08+wave*.018))type='runner';
+ if(wave>=4&&Math.random()<Math.min(.24,.06+wave*.016))type='brute';
+ let word=type==='runner'?nextFromBag(wordsFast,'fast'):(wave>=4&&type==='brute'?nextFromBag(wordsHard,'hard'):nextFromBag(wordsEasy,'easy'));
+ if(state.oneLetter>0&&type!=='runner')word=String.fromCharCode(97+Math.floor(Math.random()*26));
+ // Regra rígida: zumbis velozes sempre usam palavras de 3 ou 4 letras.
+ if(type==='runner'&&(word.length<3||word.length>4)){
+   const valid=wordsFast.filter(w=>w.length===3||w.length===4);
+   word=nextFromBag(valid,'fast');
+ }
+ const z={id:Math.random().toString(36).slice(2),type,variant:Math.floor(Math.random()*6),word,progress:0,errorAt:-1,x:rand(150,810),y:rand(205,285),depth:rand(.72,1.06),dist:rand(.04,.16),baseSpeed:type==='runner'?.013+wave*.0012:type==='brute'?.0045+wave*.0005:.0065+wave*.0008,hp:1,hitFlash:0,phase:rand(0,6),bob:rand(0,6)};
+ state.zombies.push(z);state.waveSpawned++;
+}
+function spawnItem(){
+ if(state.items.length>=2)return;
+ const t=pick(itemTypes);
+ state.items.push({...t,id:Math.random().toString(36).slice(2),x:rand(220,740),y:rand(230,310),life:11,bob:rand(0,6)});
+}
+function begin(){
+ state.running=true;state.over=false;$('overlay').classList.add('hidden');state.waveSpawned=0;state.waveTotal=5;spawnZombie();spawnClock=3.2;itemClock=5;lastTime=performance.now();requestAnimationFrame(loop);
+}
+function setNotice(t){notice=t;noticeTimer=1.7}
+function chooseTarget(z){state.target=z;state.typed='';state.errors=[];z.errorAt=-1;updateTyping()}
+function abandon(){if(state.target){state.target.errorAt=-1;state.target=null;state.typed='';state.errors=[];updateTyping();setNotice('ALVO ABANDONADO');}}
+function typeChar(ch){
+ if(!state.running||state.over)return;
+ ch=ch.toLowerCase();
+ // Item codes can be typed only when no zombie is locked, avoiding accidental target switching.
+ if(!state.target){
+   // Prioridade: se a letra digitada inicia a palavra de algum zumbi,
+   // selecionar o zumbi mais próximo antes de considerar qualquer item.
+   const matchingZombies=state.zombies
+     .filter(z=>z.dist>0&&z.word.toLowerCase().startsWith(ch))
+     .sort((a,b)=>a.dist-b.dist);
+   if(matchingZombies.length){
+     chooseTarget(matchingZombies[0]);
+     enterForTarget(ch);
+     return;
+   }
+   const item=state.items.find(i=>i.code.toLowerCase().startsWith(ch));
+   if(item){state.target={item:true,ref:item,word:item.code};state.typed=ch;state.errors=[];updateTyping();if(state.typed===item.code.toLowerCase())collectItem(state.target.ref);return;}
+   const z=state.zombies.filter(z=>z.dist>0).sort((a,b)=>a.dist-b.dist)[0];
+   if(z){chooseTarget(z);if(ch.length===1)enterForTarget(ch);}
+   return;
+ }
+ enterForTarget(ch);
+}
+function enterForTarget(ch){
+ if(!state.target)return;
+ const word=state.target.item?state.target.word.toLowerCase():state.target.word.toLowerCase();
+ const pos=state.typed.length;
+ if(ch===word[pos]){
+   state.typed+=ch;
+   if(!state.target.item)state.target.progress=state.typed.length;
+   updateTyping();
+   if(state.typed===word){if(state.target.item)collectItem(state.target.ref);else shootTarget();}
+ }else{
+   state.errors.push({pos,ch});if(!state.target.item)state.target.errorAt=pos;
+   updateTyping(true);shake=0.12;setNotice('ERRO DE DIGITAÇÃO');
+ }
+}
+function backspace(){if(!state.target||!state.running)return;state.typed=state.typed.slice(0,-1);state.errors=[];if(!state.target.item)state.target.progress=state.typed.length;updateTyping()}
+function updateTyping(error=false){
+ const el=$('typingPrompt');
+ if(!state.target){el.innerHTML='<span style="color:#738782">Nenhum alvo selecionado...</span>';return}
+ const word=(state.target.item?state.target.word:state.target.word).toLowerCase();
+ let html='';
+ for(let i=0;i<word.length;i++){
+   if(i<state.typed.length)html+=`<span class="typed">${escapeHtml(word[i])}</span>`;
+   else if(error&&i===state.typed.length)html+=`<span class="wrong">${escapeHtml(state.errors[state.errors.length-1]?.ch||word[i])}</span><span class="remaining">${escapeHtml(word.slice(i+1))}</span>`;
+   else html+=`<span class="remaining">${escapeHtml(word[i])}</span>`;
+ }
+ el.innerHTML=html||'<span class="remaining">_</span>';
+ $('typingLabel').textContent=state.target.item?'TERMINAL DE SUPRIMENTOS // DIGITE O CÓDIGO':'TERMINAL DE MIRA // DIGITE PARA ATIRAR';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function shootTarget(){
+ const z=state.target;if(!z)return;
+ state.shots++;shot=.18;flash=.12;
+ z.hp=0;
+ if(z.hp<=0){
+   state.kills++;state.score+=z.type==='brute'?180:z.type==='runner'?130:100;
+   spawnHeadExplosion(z);
+   state.zombies=state.zombies.filter(q=>q!==z);setNotice(z.type==='brute'?'ALVO PESADO ELIMINADO':'ALVO ELIMINADO');
+ }else{z.hitFlash=.35;state.score+=25;setNotice('ACERTO! COMPLETE NOVAMENTE');}
+ state.target=null;state.typed='';state.errors=[];updateTyping();updateHud();
+}
+function spawnHeadExplosion(z){
+ // Explosão estilizada em pixel art: fragmentos da cabeça e partículas vermelhas, rápida e legível.
+ const scale=.58+z.dist*.68;
+ const x=z.x+Math.sin(z.phase)*3;
+ const ground=310+z.dist*142+(z.y-280)*.25;
+ const bodyH=(z.type==='brute'?52:43)*scale;
+ const head=17*scale;
+ const cx=x,cy=ground-bodyH-head*.68+head*.48;
+ const colors=['#8b9a66','#c4ce8a','#6d7c4e','#b93e42','#e85b53','#672b30','#f0b1a0'];
+ const pieces=[];
+ for(let i=0;i<17;i++){
+   const a=rand(0,Math.PI*2),speed=rand(48,170);
+   pieces.push({x:cx+rand(-head*.35,head*.35),y:cy+rand(-head*.3,head*.3),vx:Math.cos(a)*speed,vy:Math.sin(a)*speed-rand(25,80),size:rand(2,5)*scale,color:pick(colors),life:rand(.22,.48),maxLife:.48,spin:rand(-8,8)});
+ }
+ state.effects.push({x:cx,y:cy,life:.28,maxLife:.28,pieces});
+ shake=Math.max(shake,.09);
+}
+function drawEffects(dt){
+ for(const fx of state.effects){
+   const alpha=Math.max(0,fx.life/fx.maxLife);
+   // breve clarão quadrado no ponto do impacto
+   rect(fx.x-8*alpha,fx.y-8*alpha,16*alpha,16*alpha,`rgba(255,218,145,${alpha*.8})`);
+   for(const p of fx.pieces){
+     ctx.globalAlpha=Math.max(0,p.life/(p.maxLife||.48));
+     rect(p.x,p.y,p.size,p.size,p.color);
+     ctx.globalAlpha=1;
+   }
+ }
+}
+function collectItem(item){
+ state.items=state.items.filter(i=>i!==item);
+ if(item.kind==='freeze'){state.freeze=5;setNotice('CRIOGRANADA ATIVADA · 5s');}
+ if(item.kind==='one'){state.oneLetter=7;state.zombies.forEach(z=>z.word=String.fromCharCode(97+Math.floor(Math.random()*26)));setNotice('MUNIÇÃO TÁTICA · PALAVRAS REDUZIDAS');}
+ if(item.kind==='heal'){state.health=Math.min(state.maxHealth,state.health+1);setNotice('KIT MÉDICO · +1 VIDA');}
+ state.score+=50;state.target=null;state.typed='';state.errors=[];updateTyping();updateHud();
+}
+function updateHud(){
+ $('healthText').textContent=Array.from({length:state.maxHealth},(_,i)=>i<state.health?'♥':'♡').join(' ');
+ $('healthBar').style.width=(state.health/state.maxHealth*100)+'%';
+ $('waveText').textContent=String(state.wave).padStart(2,'0')+' / '+state.waveMax;
+ $('waveBar').style.width=((state.wave-1)/state.waveMax*100)+'%';
+ $('killsText').textContent=String(state.kills).padStart(3,'0');$('scoreText').textContent=String(state.score).padStart(4,'0');
+ $('threatText').textContent=state.target?(state.target.item?'ITEM':state.target.type==='brute'?'BLINDADO':state.target.type==='runner'?'VELOZ':'ERRANTE'):(state.zombies.length?'NO SETOR':'NENHUMA');
+ $('statusText').textContent=state.freeze>0?'HORDA CONGELADA':state.oneLetter>0?'MUNIÇÃO ESPECIAL':'MIRA AUTOMÁTICA';
+}
+function hurt(z){
+ state.health--;state.zombies=state.zombies.filter(q=>q!==z);
+ if(state.target===z){state.target=null;state.typed='';state.errors=[];updateTyping()}
+ shake=.28;flash=.2;setNotice('IMPACTO! -1 VIDA');updateHud();
+ if(state.health<=0)endGame(false);
+}
+function endGame(win){
+ state.over=true;state.running=false;
+ $('overlay').classList.remove('hidden');
+ $('overlay').innerHTML=`<div class="modal"><h1>${win?'VOCÊ SOBREVIVEU':'FIM DE JOGO'}</h1><div class="big">${win?'SETOR 07 LIBERADO':'A HORDA TOMOU O SETOR'}</div><p>Ondas sobrevividas: <strong>${Math.min(state.wave,state.waveMax)}</strong><br>Abates: <strong>${state.kills}</strong> · Pontuação: <strong>${state.score}</strong></p><button id="startBtn">JOGAR NOVAMENTE ↻</button></div>`;
+ $('startBtn').onclick=()=>{reset();begin()};
+}
+function update(dt){
+ state.elapsed+=dt;shake=Math.max(0,shake-dt);flash=Math.max(0,flash-dt);shot=Math.max(0,shot-dt);if(noticeTimer>0)noticeTimer-=dt;
+ if(state.freeze>0)state.freeze=Math.max(0,state.freeze-dt);
+ if(state.oneLetter>0)state.oneLetter=Math.max(0,state.oneLetter-dt);
+ for(const fx of state.effects){fx.life-=dt;for(const p of fx.pieces){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=260*dt;}}
+ state.effects=state.effects.filter(fx=>fx.life>0);
+ state.zombies.forEach(z=>{
+   z.phase+=dt*3;z.hitFlash=Math.max(0,z.hitFlash-dt);
+   if(state.freeze<=0){z.dist+=z.baseSpeed*dt*60;z.x+=(480-z.x)*dt*.004;}
+ });
+ for(const z of [...state.zombies])if(z.dist>=1.18)hurt(z);
+ if(state.over)return;
+ spawnClock-=dt;
+ if(state.waveSpawned<state.waveTotal&&spawnClock<=0){
+   spawnZombie();spawnClock=Math.max(1.15,3.1-state.wave*.08)*rand(.8,1.3);
+ }
+ itemClock-=dt;
+ if(itemClock<=0){if(Math.random()<.82)spawnItem();itemClock=rand(8,13)}
+ state.items.forEach(i=>{i.life-=dt;i.bob+=dt*2});
+ state.items=state.items.filter(i=>i.life>0);
+ // Finish a wave only when every scheduled enemy has spawned and the field is clear.
+ if(state.waveSpawned>=state.waveTotal&&state.zombies.length===0){
+   state.between+=dt;
+   if(state.between>2.5){
+     if(state.wave>=state.waveMax){endGame(true);return}
+     state.wave++;state.waveSpawned=0;state.waveTotal=5+state.wave*2;state.between=0;spawnClock=2.8;
+     state.zombies=[];spawnClock=.7;setNotice('ONDA '+String(state.wave).padStart(2,'0')+' — PREPARE-SE');updateHud();
+   }
+ }else state.between=0;
+ updateHud();
+}
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
+function text(t,x,y,size,color,align='center'){ctx.font=`bold ${size}px Consolas, monospace`;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillStyle='#05090b';ctx.fillText(t,x+2,y+2);ctx.fillStyle=color;ctx.fillText(t,x,y)}
+function drawBackground(t){
+ // dusk sky and ruined city skyline
+ const sky=ctx.createLinearGradient(0,0,0,360);sky.addColorStop(0,'#172e37');sky.addColorStop(.6,'#4a4b43');sky.addColorStop(1,'#9a6847');ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+ rect(0,260,W,115,'#343c36');rect(0,295,W,80,'#252f2d');
+ // distant moon
+ ctx.fillStyle='#d2c89a';ctx.beginPath();ctx.arc(765,85,28,0,Math.PI*2);ctx.fill();rect(752,62,8,4,'#9d9d7d');
+ // silhouettes of broken buildings
+ for(let i=0;i<18;i++){
+  const x=i*59-15,hh=70+(i*37%100),top=270-hh;
+  rect(x,top,48,hh,'#1d2b2e');
+  if(i%3===0){rect(x+18,top-18,4,18,'#1d2b2e');rect(x+12,top-20,16,3,'#1d2b2e')}
+  // Janelas com luzes que piscam em padrões diferentes ao longo do tempo.
+  for(let r=0;r<Math.floor(hh/19);r++)for(let c=0;c<3;c++){
+   const wx=x+7+c*13,wy=top+12+r*18;
+   if(wy<265&&((i*7+r*3+c*5)%4!==0)){
+    const pulse=Math.sin(t*(1.2+((i+c)%4)*.31)+i*2.1+r*1.7+c*2.6);
+    const lit=pulse>.05;
+    rect(wx,wy,5,7,lit?(((i+r+c)%3===0)?'#ffd887':'#b6bd8b'):'#283b3b');
+    if(lit&&pulse>.72)rect(wx-1,wy-1,7,9,'#ffd88718');
+   }
+  }
+ }
+ // Caças pixelados cruzam o céu periodicamente, em trajetórias alternadas.
+ const jetPass=(t%22);
+ for(let j=0;j<2;j++){
+  const cycle=(jetPass+j*11)%22;
+  if(cycle<7){
+   const progress=cycle/7,dir=j===0?1:-1;
+   const jx=dir===1?-90+progress*1140:1050-progress*1140;
+   const jy=66+j*48+Math.sin(t*1.8+j)*5;
+   ctx.save();ctx.translate(jx,jy);ctx.scale(dir,1);
+   // silhueta de caça, asas e cauda em pixels
+   rect(-30,-3,48,6,'#17262b');rect(-4,-11,17,22,'#263b40');
+   rect(10,-5,25,3,'#344b50');rect(10,3,25,3,'#344b50');
+   rect(-22,-9,11,6,'#263b40');rect(-22,3,11,6,'#263b40');
+   rect(29,-2,10,4,'#9aa69a');rect(-29,-2,9,4,'#647d80');
+   // pequeno brilho da turbina
+   rect(-34,-2,5,4,cycle<6?'#f0a56b':'#718b91');
+   ctx.restore();
+  }
+ }
+ // road perspective
+ ctx.fillStyle='#41433c';ctx.beginPath();ctx.moveTo(0,330);ctx.lineTo(960,330);ctx.lineTo(960,540);ctx.lineTo(0,540);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#55554a';ctx.beginPath();ctx.moveTo(435,330);ctx.lineTo(525,330);ctx.lineTo(720,540);ctx.lineTo(220,540);ctx.closePath();ctx.fill();
+ // road cracks and debris
+ for(let i=0;i<24;i++){let x=(i*83+17)%960,y=350+(i*31%180);rect(x,y,3+(i%4)*2,2,'#252f2e')}
+ // ruined car shapes
+ rect(70,385,110,35,'#18272a');rect(86,372,65,20,'#273a3b');rect(82,414,22,14,'#0b1113');rect(148,414,22,14,'#0b1113');
+ rect(760,405,105,30,'#202f30');rect(779,390,57,18,'#354342');rect(777,429,20,12,'#090f11');rect(836,429,20,12,'#090f11');
+ // foreground barricade
+ rect(0,468,960,72,'#171e1e');rect(0,468,960,6,'#6d583c');for(let x=12;x<960;x+=46){rect(x,478,26,8,'#3c4840');rect(x+4,493,18,4,'#222d2c')}
+ // crosshair / vignette
+ const g=ctx.createRadialGradient(480,265,100,480,265,530);g.addColorStop(.4,'#0000');g.addColorStop(1,'#02090cc9');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ // film scanlines
+ ctx.fillStyle='#05090b18';for(let y=0;y<H;y+=4)ctx.fillRect(0,y,W,1);
+}
+function drawZombie(z,t){
+ // Sprites redesenhados em pixel art de alto contraste, com silhuetas e roupas distintas.
+ const scale=.58+z.dist*.68, x=z.x+Math.sin(z.phase+t*.001)*2.5, ground=310+z.dist*142+(z.y-280)*.25;
+ const s=scale, brute=z.type==='brute', runner=z.type==='runner';
+ const bodyW=(brute?46:runner?25:30)*s, bodyH=(brute?55:runner?40:44)*s;
+ const palettes=[
+  {skin:'#71875c',light:'#a8b87a',dark:'#394b36',shirt:'#3b5145',pants:'#303c32',accent:'#b74640'},
+  {skin:'#9b8060',light:'#c9a17a',dark:'#554638',shirt:'#51404b',pants:'#34313d',accent:'#d4b16a'},
+  {skin:'#7c9879',light:'#b4c58b',dark:'#435744',shirt:'#62513a',pants:'#45453a',accent:'#8c3d3e'},
+  {skin:'#a4a18a',light:'#d4c9a1',dark:'#565c4d',shirt:'#263f50',pants:'#343a42',accent:'#e0a747'},
+  {skin:'#697c8c',light:'#a5b5b8',dark:'#35434c',shirt:'#51433a',pants:'#292f35',accent:'#76c5c4'},
+  {skin:'#a17a68',light:'#d4a18a',dark:'#593b39',shirt:'#3f4a3a',pants:'#3a3030',accent:'#a7c46a'}
+ ];
+ const p=palettes[z.variant%palettes.length], skin=z.hitFlash>0?'#f4e3b5':p.skin;
+ const rect=(xx,yy,ww,hh,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(xx),Math.round(yy),Math.max(1,Math.round(ww)),Math.max(1,Math.round(hh)))};
+ ctx.fillStyle='#080e0dbb';ctx.beginPath();ctx.ellipse(x,ground+4,bodyW*.92,7*s,0,0,Math.PI*2);ctx.fill();
+ // pernas, botas e rasgos
+ rect(x-bodyW*.34,ground-bodyH*.46,9*s,bodyH*.45,p.pants);rect(x+bodyW*.06,ground-bodyH*.45,9*s,bodyH*.44,p.pants);
+ rect(x-bodyW*.43,ground-5*s,15*s,5*s,'#1a2222');rect(x+bodyW*.01,ground-5*s,16*s,5*s,'#1a2222');
+ rect(x-bodyW*.36,ground-bodyH*.29,4*s,8*s,p.dark);rect(x+bodyW*.13,ground-bodyH*.23,4*s,6*s,p.dark);
+ // tronco e sombras laterais
+ rect(x-bodyW*.49,ground-bodyH,bodyW*.98,bodyH*.64,p.shirt);rect(x-bodyW*.39,ground-bodyH+4*s,bodyW*.78,bodyH*.48,p.dark);
+ rect(x-bodyW*.3,ground-bodyH+6*s,bodyW*.57,bodyH*.44,p.shirt);rect(x-bodyW*.17,ground-bodyH+9*s,bodyW*.17,bodyH*.25,p.accent);
+ // roupa rasgada / costuras pixeladas
+ rect(x-bodyW*.43,ground-bodyH+bodyH*.36,7*s,4*s,'#171f20');rect(x+bodyW*.2,ground-bodyH+bodyH*.48,8*s,3*s,'#171f20');
+ rect(x-bodyW*.36,ground-bodyH+bodyH*.2,3*s,bodyH*.16,p.light);rect(x+bodyW*.25,ground-bodyH+bodyH*.16,3*s,bodyH*.2,p.light);
+ // braços em pose irregular
+ rect(x-bodyW*.73,ground-bodyH*.84,bodyW*.25,bodyH*.48,skin);rect(x+bodyW*.49,ground-bodyH*.82,bodyW*.25,bodyH*.5,skin);
+ rect(x-bodyW*.78,ground-bodyH*.42,bodyW*.32,5*s,p.dark);rect(x+bodyW*.43,ground-bodyH*.4,bodyW*.31,5*s,p.dark);
+ rect(x-bodyW*.75,ground-bodyH*.29,6*s,5*s,p.light);rect(x+bodyW*.54,ground-bodyH*.27,6*s,5*s,p.light);
+ // pescoço e cabeça
+ rect(x-5*s,ground-bodyH-5*s,10*s,8*s,p.dark);
+ const head=(brute?22:runner?15:18)*s, hx=x-head*.5, hy=ground-bodyH-head*.72;
+ rect(hx-2*s,hy+2*s,head+4*s,head*.88,p.dark);rect(hx,hy,head,head,'#28312b');rect(hx+2*s,hy+2*s,head-4*s,head-3*s,skin);
+ rect(hx+2*s,hy+2*s,head-4*s,3*s,p.light);rect(hx+1*s,hy+head*.55,head-2*s,head*.18,p.dark);
+ // mandíbula, dentes e olhos brilhantes
+ rect(hx+head*.18,hy+head*.57,head*.62,head*.19,'#342326');rect(hx+head*.25,hy+head*.58,3*s,2*s,'#e6d9b5');rect(hx+head*.55,hy+head*.58,3*s,2*s,'#e6d9b5');
+ rect(hx+head*.2,hy+head*.31,4*s,3*s,runner?'#ffb05c':'#f5d36e');rect(hx+head*.62,hy+head*.31,4*s,3*s,runner?'#ffb05c':'#f5d36e');
+ rect(hx+head*.38,hy+head*.39,3*s,3*s,'#1c2520');rect(hx+head*.08,hy+head*.15,5*s,3*s,p.dark);
+ // feridas e respingos
+ rect(hx+head*.06,hy+head*.68,5*s,3*s,'#8b3438');rect(hx+head*.72,hy+head*.44,3*s,5*s,'#b64240');rect(x-bodyW*.1,ground-bodyH*.1,4*s,3*s,'#9f3437');
+ // variações reconhecíveis: cabelo, boné, capuz, capacete, máscara e mochila
+ if(z.variant===0){rect(hx-1*s,hy-2*s,head+2*s,4*s,'#302b28');rect(hx,hy+2*s,3*s,head*.45,'#302b28');}
+ if(z.variant===1){rect(hx-2*s,hy-2*s,head+4*s,5*s,'#9a9a82');rect(hx,hy-1*s,head,2*s,'#d5c8a4');rect(x+bodyW*.18,ground-bodyH*.3,6*s,7*s,p.accent);}
+ if(z.variant===2){rect(hx-2*s,hy-3*s,head+4*s,5*s,'#253c50');rect(hx+head*.35,hy-5*s,head*.28,3*s,'#c74e45');}
+ if(z.variant===3){rect(x-bodyW*.51,ground-bodyH+6*s,bodyW*1.02,7*s,'#b77b35');rect(x-bodyW*.42,ground-bodyH+13*s,5*s,8*s,'#e5c46b');rect(hx-2*s,hy-4*s,head+4*s,5*s,'#c5a052');}
+ if(z.variant===4){rect(hx-2*s,hy+head*.28,head+4*s,head*.25,'#293d42');rect(hx+head*.2,hy+head*.31,4*s,3*s,'#8cf4e7');rect(x+bodyW*.43,ground-bodyH*.9,7*s,bodyH*.44,'#202c30');}
+ if(z.variant===5){rect(hx-2*s,hy-2*s,head+4*s,4*s,'#402a26');rect(hx-3*s,hy+head*.35,4*s,head*.48,'#402a26');rect(hx+head-1*s,hy+head*.35,4*s,head*.48,'#402a26');}
+ // Silhueta pesada com placas, ombreiras e marcas de batalha; continua com apenas um acerto para morrer.
+ if(brute){
+   rect(x-bodyW*.58,ground-bodyH+7*s,bodyW*1.16,12*s,'#292f30');rect(x-bodyW*.55,ground-bodyH+8*s,bodyW*.3,10*s,'#778078');rect(x+bodyW*.24,ground-bodyH+8*s,bodyW*.3,10*s,'#778078');
+   rect(x-bodyW*.49,ground-bodyH+21*s,bodyW*.98,8*s,'#74634d');rect(x-bodyW*.38,ground-bodyH+22*s,6*s,5*s,'#d0b477');
+   rect(hx-3*s,hy-4*s,head+6*s,6*s,'#8d8f6d');rect(hx+head*.13,hy+head*.42,head*.72,4*s,'#6d292b');
+   rect(x-bodyW*.66,ground-bodyH*.82,10*s,13*s,'#8a8d7d');rect(x+bodyW*.52,ground-bodyH*.82,10*s,13*s,'#8a8d7d');
+ }
+ if(runner){rect(x+head*.2,ground-bodyH-head*.83,8*s,3*s,'#b7bfa0');rect(x-bodyW*.2,ground-bodyH*.55,7*s,bodyH*.15,p.accent);}
+ // pontos de brilho e contorno para leitura contra o cenário escuro
+ rect(x-bodyW*.51,ground-bodyH+3*s,bodyW*.08,bodyH*.18,p.light);rect(x+bodyW*.4,ground-bodyH+bodyH*.26,3*s,bodyH*.14,p.accent);
+}
+function drawItem(i){
+ const y=i.y+Math.sin(i.bob)*4;
+ ctx.fillStyle='#0009';ctx.beginPath();ctx.ellipse(i.x,y+20,20,6,0,0,Math.PI*2);ctx.fill();
+ rect(i.x-13,y-14,26,30,'#1b2928');rect(i.x-10,y-11,20,24,'#52665a');rect(i.x-7,y-8,14,18,i.color);rect(i.x-3,y-4,6,10,'#1b2928');
+ text(i.code,i.x,y-29,13,i.color);
+ text(i.name,i.x,y+37,8,'#e1e6d0');
+}
+function drawGun(){
+ // pixelated hands and rifle at bottom foreground
+ const recoil=shot>0?12:0;
+ rect(402,456+recoil,160,84,'#172226');rect(424,438+recoil,112,55,'#33403d');rect(442,424+recoil,78,43,'#5a6255');
+ rect(453,412+recoil,54,35,'#242e2e');rect(465,397+recoil,29,35,'#5b6658');rect(470,387+recoil,19,22,'#111a1d');
+ rect(444,458+recoil,17,56,'#111a1d');rect(500,458+recoil,17,56,'#111a1d');
+ // iron sight
+ rect(476,360+recoil,8,22,'#111719');rect(468,368+recoil,24,5,'#111719');
+ if(shot>0){ctx.fillStyle='#ffed8a';ctx.beginPath();ctx.moveTo(480,384+recoil);ctx.lineTo(464,350+recoil);ctx.lineTo(480,360+recoil);ctx.lineTo(496,350+recoil);ctx.closePath();ctx.fill()}
+ // crosshair
+ ctx.strokeStyle='#dce8c9aa';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(465,260);ctx.lineTo(475,260);ctx.moveTo(485,260);ctx.lineTo(495,260);ctx.moveTo(480,245);ctx.lineTo(480,255);ctx.moveTo(480,265);ctx.lineTo(480,275);ctx.stroke();
+}
+function draw(t){
+ ctx.save();if(shake>0)ctx.translate(rand(-5,5),rand(-3,3));
+ drawBackground(t);
+ // distant fog bands
+ rect(0,300,960,5,'#d6bd7c0b');rect(0,340,960,9,'#d6bd7c0b');
+ state.zombies.slice().sort((a,b)=>a.dist-b.dist).forEach(z=>{
+   drawZombie(z,t);
+   const headY=310+z.dist*142+(z.y-280)*.25-(z.type==='brute'?52:45)*(.58+z.dist*.68);
+   const word=z.word.toUpperCase();
+   const active=state.target===z;
+   const boxW=Math.max(42,word.length*10+18),boxH=25;
+   rect(z.x-boxW/2,headY-32,boxW,boxH,active?'#d8ff77':'#10191de8');
+   rect(z.x-boxW/2,headY-32,boxW,2,active?'#f4f4ca':'#708176');
+   if(active){
+     const typed=state.typed.length;
+     text(word.slice(0,typed),z.x-boxW/2+8,headY-20,12,'#7b963b','left');
+     text(word.slice(typed),z.x-boxW/2+8+ctx.measureText(word.slice(0,typed)).width,headY-20,12,'#202c22','left');
+   }else text(word,z.x,headY-20,12,'#f3edcf');
+   if(active&&z.errorAt>=0){text('ERRO!',z.x,headY-43,10,'#ff555d')}
+   if(z.type==='brute')text('BLINDADO',z.x,headY-48,8,'#ffad65');
+   if(z.type==='runner')text('VELOZ',z.x,headY-48,8,'#ffad65');
+ });
+ drawEffects();
+ state.items.forEach(drawItem);
+ drawGun();
+ // screen details
+ rect(14,14,202,45,'#071116bb');text('● REC',28,27,10,'#ff666d','left');text('SETOR 07 // AO VIVO',28,44,11,'#c9d9c9','left');
+ rect(744,14,202,45,'#071116bb');text('TEMPO: '+formatTime(state.elapsed),930,27,10,'#c9d9c9','right');text('FPS // SOBREVIVÊNCIA',930,44,10,'#8fa7a0','right');
+ if(state.freeze>0){rect(0,0,W,H,'#70eaff15');text('HORDA CONGELADA',480,80,20,'#9cf6ff')}
+ if(state.oneLetter>0){text('MUNIÇÃO ESPECIAL '+Math.ceil(state.oneLetter)+'s',480,105,12,'#ffe16b')}
+ if(noticeTimer>0){rect(300,72,360,30,'#101b20dd');text(notice,480,87,12,notice.includes('ERRO')?'#ff646b':'#d8ff77')}
+ if(flash>0){ctx.fillStyle=`rgba(255,60,55,${flash*.35})`;ctx.fillRect(0,0,W,H)}
+ if(state.between>0&&state.between<2.5){rect(320,150,320,60,'#0b1316dd');text('SETOR LIMPO',480,170,19,'#d8ff77');text('PRÓXIMA ONDA SE APROXIMA...',480,194,10,'#d8d9c2')}
+ ctx.restore();
+}
+function formatTime(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0')}
+function loop(now){
+ if(!state.running)return;
+ const dt=Math.min(.05,(now-lastTime)/1000||.016);lastTime=now;update(dt);draw(now/1000);
+ if(state.running)requestAnimationFrame(loop);
+}
+window.addEventListener('keydown',e=>{
+ if(['Backspace',' '].includes(e.key))e.preventDefault();
+ if(e.key==='Backspace'){backspace();return}
+ if(e.key==='Escape'){abandon();return}
+ if(e.key==='Enter'&&!state.running&&!state.over){begin();return}
+ if(/^[a-zA-Z]$/.test(e.key))typeChar(e.key);
+});
+$('startBtn').onclick=begin;
+$('skipBtn').onclick=abandon;
+$('restartBtn').onclick=()=>{reset();begin()};
+reset();
+})();
+</script>
+</body>
+</html>
